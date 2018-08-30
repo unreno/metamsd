@@ -368,7 +368,7 @@ if (length(result)>0){
 
 }
 
-#message(colnames(meta.result))
+message(colnames(meta.result))
 
 
 
@@ -384,12 +384,29 @@ write.table(meta.result, file=paste(output,"MetaAnalysisResult.txt", sep="/"),
 
 #2. a qplot (q-value threshold vs. # of detected proteins)
 meta.no <- q.no(meta.result$qvalue.meta)
-set1.no <- q.no(meta.result$qvalue.set1)
-set2.no <- q.no(meta.result$qvalue.set2)
-max.value = max(c(
-	sum(meta.result$qvalue.meta<q.value.cutoff, na.rm=TRUE),
-	sum(meta.result$qvalue.set1<q.value.cutoff, na.rm=TRUE),
-	sum(meta.result$qvalue.set2<q.value.cutoff, na.rm=TRUE)))
+#set1.no <- q.no(meta.result$qvalue.set1)
+#set2.no <- q.no(meta.result$qvalue.set2)
+
+
+set.no = list()
+for (i in 1:N.dataset){
+	#message(meta.result[paste0("qvalue.set",i)][,])
+	set.no[[i]] <- q.no(meta.result[paste0("qvalue.set",i)][,])
+}
+
+#max.value = max(c(
+#	sum(meta.result$qvalue.meta<q.value.cutoff, na.rm=TRUE),
+#	sum(meta.result$qvalue.set1<q.value.cutoff, na.rm=TRUE),
+#	sum(meta.result$qvalue.set2<q.value.cutoff, na.rm=TRUE)))
+
+sums = c()
+sums[1] = sum(meta.result$qvalue.meta<q.value.cutoff, na.rm=TRUE)
+for (i in 1:N.dataset){
+	sums[length(sums)+1] = sum( meta.result[paste0("qvalue.set",i)] < q.value.cutoff, na.rm=TRUE )
+}
+max.value = max( sums )
+	
+
 max.value = round(max.value+5)
 pdf(paste(output,"qplot.pdf", sep="/"))
 par(mar=c(5,5,3,3))
@@ -397,10 +414,23 @@ plot(meta.no$x, meta.no$y, type="l", lwd=2,
 	xlim=c(0,q.value.cutoff), ylim=c(0, max.value), 
 	xlab="q-value threshold", ylab="# of differential proteins", 
 	cex.lab=1.5, cex.axis=1.5, lty=1, col=1)
-points(set1.no$x, set1.no$y, type="l", lwd=2, lty=1, col=2)
-points(set2.no$x, set2.no$y, type="l", lwd=2, lty=1, col=3)
-legend("topleft", c("Meta Analysis", "Single Analysis (Set1)", "Single Analysis (Set2)"),
-	lty=c(1,1,1),col=c(1,2,3), lwd=c(2,2,2), cex=1.3)
+
+#points(set1.no$x, set1.no$y, type="l", lwd=2, lty=1, col=2)
+#points(set2.no$x, set2.no$y, type="l", lwd=2, lty=1, col=3)
+for (i in 1:N.dataset){
+	points(set.no[[i]]$x, set.no[[i]]$y, type="l", lwd=2, lty=1, col=i+1)
+}
+
+
+legend_labels = c("Meta Analysis")
+#"Single Analysis (Set1)", "Single Analysis (Set2)")
+for (i in 1:N.dataset){
+#	legend_labels[length(legend_labels)+1] = paste0("Single Analysis (Set ",i,")")
+	legend_labels[i+1] = paste0("Single Analysis (Set ",i,")")
+}
+legend("topleft", legend_labels, lty=c(1,1,1),col=c(1,2,3), lwd=c(2,2,2), cex=1.3)
+
+
 
 #	This prints "null device\n 1". Seems to work when removed.
 #dev.off()
