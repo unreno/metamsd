@@ -1,0 +1,444 @@
+#!/usr/bin/env Rscript
+
+message()
+message("MetaMSD")
+message()
+
+directory=getwd()
+
+#r <- getOption("repos")
+#if( r['CRAN'] == "@CRAN@" ){
+#	r["CRAN"] <- "https://cloud.r-project.org/"
+#}
+
+#	install.packages will prompt for a CRAN location which will cause a crash
+#	I set this in my ~/.Rprofile, but not everyone does.
+#	If the user does not have package install privileges, it may also fail.
+
+#list.of.packages <- c("ROCR","stats","gridExtra","gtable","optparse")
+#new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
+#if(length(new.packages)) install.packages(new.packages, repos=r)
+
+
+
+#	BioConductor packages ( qvalue was not available for R 3.5.0 )
+#	Using BioConductor all the time if possible is likely the better option and seems to work.
+
+#list.of.packages <- c("qvalue")
+list.of.packages <- c("ROCR","stats","gridExtra","gtable","optparse","qvalue")
+new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
+if(length(new.packages)){
+	source("https://bioconductor.org/biocLite.R")
+	biocLite( new.packages )
+}
+
+
+
+#	http://tuxette.nathalievilla.org/?p=1696
+library("optparse")
+
+option_list = list(
+#	make_option(c("-m", "--models"), type="character", default="models/",
+#		help="models path [ default = %default ]", metavar="character"),
+#	make_option(c("-d", "--data"), type="character", default="data/",
+#		help="data path [ default = %default ]", metavar="character"),
+#	make_option(c("-e", "--decoy"), type="character", default="Decoy_v1.RData",
+#		help="decoy model file with path [ default = %default ]", metavar="character"),
+#	make_option(c("--snr"), type="integer", default=3,
+#		help="Acceptable SNR ratio for peaks [ default = %default ]", metavar="number"),
+
+	make_option(c("-m","--metaanalysis"), type="character", default="Stouffer",
+		help="either Stouffer's or Pearson's test [ default = %default ]", metavar="character"),
+	make_option(c("-c","--cutoff"), type="double", default=0.05,
+		help="q.value.cutoff [ default = %default ]", metavar="number"),
+	make_option(c("-t","--top"), type="integer", default=15,
+		help="top n protein final list in Table [ default = %default ]", metavar="number"),
+	make_option(c("-i", "--input"), type="character", default="input",
+		help="input dir [ default = %default ]", metavar="character"),
+	make_option(c("-o", "--output"), type="character", default="output",
+		help="output dir [ default = %default ]", metavar="character")
+)
+opt_parser = OptionParser(option_list=option_list)
+opt = parse_args(opt_parser)
+
+
+
+# the number of input data sets. This will be computed later.
+
+
+if ( ! opt$metaanalysis %in% c("Stouffer","Pearson") ){
+	stop("MetaAnalysis must be either Stouffer or Pearson\n", call.=FALSE)
+}
+MetaAnalysis   = opt$metaanalysis
+q.value.cutoff = opt$cutoff
+Top.n          = opt$top
+input          = opt$input
+output         = opt$output
+dir.create( output, showWarnings = FALSE, recursive = TRUE )
+
+
+
+
+
+
+require(ROCR)
+require(stats)
+require(qvalue)
+require(gridExtra)
+require(gtable)
+
+
+
+
+
+
+
+
+
+
+######################################################################
+
+
+
+
+################
+#Misc Functions#
+################
+
+left <- function(p, stat){left.p = ifelse(stat<0, p/2, 1-p/2); return(unlist(left.p))}
+
+#qvalue.q <- function(x){qvalue(x)$qvalues}
+#bh.fdr.q <- function(x){p.adjust(x, method="fdr")}
+#auc.sum <- function(x, diff){
+#	pred <- prediction(as.vector(-1*x), as.vector(diff))
+#	perf <- performance(pred, "prec", "rec")
+#	temp=performance(pred, 'auc') 
+#	auc=slot(temp, "y.values")[[1]][1]	
+#	return(auc)
+#}
+#mean.na.rm=function(x){mean(x[!is.na(x)])}
+#sd.na.rm=function(x){sd(x[!is.na(x)])}
+
+#############
+#Fisher.test#
+#############
+na.perc <- function(x){mean(is.na(x))}
+Fisher.test <- function(DEprotein, union=TRUE){
+	if (union==FALSE){
+		index=which(apply(DEprotein$p, 1, na.perc)>0)
+		DEprotein$p[index,]=NA
+	}
+	return(apply(DEprotein$p, 1, fisher.test))
+}
+
+fisher.test <- function(p){
+	if(length(which(p==0))>0){
+		p[p==0]=1e-20
+	}
+	if (sum(!is.na(p))>1){
+		if (sum(p, na.rm=TRUE)==0){
+			fisher.p=1e-20
+		}else{
+			p=p[!is.na(p)]
+			fisher.p=pchisq(-2*sum(log(p)), 2*length(p), lower.tail=FALSE)
+		}
+	}else{
+		if (sum(!is.na(p))==0){fisher.p=NA}
+		if (sum(!is.na(p))==1){fisher.p=p[!is.na(p)]}
+	}	
+	return(fisher.p)
+}
+
+##############
+#Pearson.test#
+##############
+Pearson <- function(DEprotein, union=TRUE){
+	if (union==FALSE){
+		index=which(apply(DEprotein$p, 1, na.perc)>0)
+		DEprotein$p[index,]=NA
+	}
+	p = array(c(NA), dim=nrow(DEprotein$p))
+	side = array(c(NA), dim=nrow(p))
+	
+	for (i in 1:nrow(DEprotein$p)){
+		tmp=pearson(DEprotein$p[i,], DEprotein$stat[i,])
+		p[i]=tmp$p
+		side[i]=tmp$side
+	}
+	return(list(p=p, side=side))
+}
+
+pearson <- function(p.list, stat.list){
+	left.p = left(p.list, stat.list)
+	right.p = 1-left.p
+	fisher.left=fisher.test(left.p)	
+	fisher.right=fisher.test(right.p)
+	pearson = 2 * min(fisher.left, fisher.right)
+	pearson = min(c(1, pearson))
+	pearson.side = ifelse(fisher.left < fisher.right, -1,1)
+	return(list(p=pearson, side=pearson.side))
+}
+
+##########
+#Stouffer#
+##########
+Stouffer <- function(DEprotein, union=TRUE, wt=NULL){
+	if (union==FALSE){
+		index=which(apply(DEprotein$p, 1, na.perc)>0)
+		DEprotein$p[index,]=NA
+	}
+	p = array(c(NA), dim=nrow(DEprotein$p))
+	side = array(c(NA), dim=nrow(p))
+	if (length(wt)==0){wt=rep(1,ncol(DEprotein$p))}	
+	for (i in 1:nrow(DEprotein$p)){
+		tmp=stouffer.one.side(DEprotein$p[i,], DEprotein$stat[i,], wt)
+		p[i]=tmp$p
+		side[i]=tmp$side
+	}
+	return(list(p=p, side=side))
+}
+
+stouffer.one.side <- function(p.list, stat.list, wt){
+	left.p = left(p.list, stat.list)
+	right.p = 1-left.p
+	stouffer.left=stouffer.left.side(left.p, wt)	
+	stouffer.right=stouffer.right.side(right.p, wt)
+	stouffer = 2 * min(stouffer.left, stouffer.right)
+	stouffer = min(c(1, stouffer))
+	stouffer.side = ifelse(stouffer.left < stouffer.right, -1,1)
+	return(list(p=stouffer, side=stouffer.side))
+}
+
+stouffer.left.side <- function(x, wt){
+	if (length(!is.na(x))>0){
+		wt=wt[!is.na(x)]; x=x[!is.na(x)]
+		z=qnorm(x, lower.tail=FALSE)
+		#com.z=sum(z)/sqrt(length(z))
+		com.z=sum(wt*z)/sqrt(sum(wt^2))
+		p=pnorm(com.z, lower.tail=FALSE)
+	}else{
+		p=NA
+	}
+	return(p)
+}
+
+stouffer.right.side <- function(x, wt){
+	if (length(!is.na(x))>0){
+		wt=wt[!is.na(x)]; x=x[!is.na(x)] 
+		z=qnorm(x, lower.tail=TRUE)
+		com.z=sum(wt*z)/sqrt(sum(wt^2))
+		p=pnorm(com.z, lower.tail=TRUE)
+	}else{
+		p=NA
+	}
+	return(p)
+}
+
+######################################
+#no. of detected proteins at q-values#
+######################################
+q.no <- function(z){
+	a <- c(0,sort(unique(z), decreasing=FALSE))
+	b=NULL
+	for (i in 1:length(a)){
+		b[i]=sum(z <= a[i], na.rm=TRUE)
+	}
+	return(list(x=c(0,a), y=c(0,b)))
+}
+
+
+#############################################
+#measure performance of integrative approach#
+#############################################
+IDR.fun <- function(q.int, q.ind, cut){
+	num1 <- which(q.int<cut)
+	num2 <- union(which(q.ind[,1]>cut), which(is.na(q.ind[,1])))
+	for (i in 2:ncol(q.ind)){
+		tmp = union(which(q.ind[,i]>cut), which(is.na(q.ind[,i])))
+		num2 <- intersect(num2, tmp)
+	}
+	num=length(intersect(num1, num2))
+	den=length(num1)
+	return(num/den)
+}
+
+IRR.fun <- function(q.int, q.ind, cut){
+	num1 <- union(which(q.int > cut), which(is.na(q.int)))
+	num2 <- which(q.ind[,1]<cut)
+	for (i in 2:ncol(q.ind)){
+		tmp = which(q.ind[,2]<cut)
+		num2 <- union(num2, tmp)
+	}
+	num=length(intersect(num1, num2))
+	den=length(num2)
+	return(num/den)
+}
+
+######################################################################
+
+
+#Two Datasets for now; need to make it such that it can take any number of datasets > 1
+
+#data1 = read.csv(file=paste(input, "Dataset1.txt", sep="/"), header=TRUE, sep="\t")
+#data2 = read.csv(file=paste(input, "Dataset2.txt", sep="/"), header=TRUE, sep="\t")
+#N.dataset = 2 #Now, it works for only 2
+#userdata=merge(data1, data2, by.x="Protein", by.y="Protein", all=TRUE, all.x=TRUE, all.y=TRUE)
+
+input_files = list.files(input, pattern=".txt$",full.names=TRUE)
+
+for( f in input_files ) {
+	message(f)
+	this_data = read.csv(file=f, header=TRUE, sep="\t")
+
+	#	apparently "data" exists from the beginning as a function so use something else
+	if( exists( "prev_data" ) ){
+		message("Merging")
+		userdata=merge(prev_data, this_data, by.x="Protein", by.y="Protein", all=TRUE, all.x=TRUE, all.y=TRUE)
+		prev_data=userdata
+	} else {
+		message("Creating")
+		prev_data = this_data
+	}
+
+}
+
+#data1 = read.csv(file=input_files[1], header=TRUE, sep="\t")
+#data2 = read.csv(file=input_files[2], header=TRUE, sep="\t")
+N.dataset = length( input_files )
+#userdata=merge(data1, data2, by.x="Protein", by.y="Protein", all=TRUE, all.x=TRUE, all.y=TRUE)
+
+
+
+
+
+#DEprotein contains protein, p-values (N.datset columns), and signs (N.dataset columns) 
+DEprotein=list(Protein=userdata$Protein,
+	p=cbind(userdata$Pvalue.x, userdata$Pvalue.y),
+	stat=cbind(userdata$Sign.x, userdata$Sign.y))
+
+
+
+#calculate q-value for each dataset
+ind.q = NULL
+for (i in 1:N.dataset){
+	ind.q[[i]]=qvalue(DEprotein$p[,i])$qvalues
+}
+
+#Meta Analysis
+if (MetaAnalysis=="Stouffer"){
+	result=Stouffer(DEprotein)
+} else if (MetaAnalysis=="Pearson"){
+	result=Pearson(DEprotein)
+} else {
+	#if ((MetaAnalysis!="Stouffer") & (MetaAnalysis!="Pearson")){
+
+	#	should never have gotten here
+	cat("Choose between Stouffer and Pearson.")
+	result=NULL
+}
+
+if (length(result)>0){
+	q.meta=qvalue(result$p)$qvalues
+	meta.result = data.frame(
+		Protein     = DEprotein$Protein,
+		Sign.set1   = ifelse(userdata$Sign.x>0,1,-1),
+		pvalue.set1 = userdata$Pvalue.x,
+		qvalue.set1 = ind.q[[1]],
+		Sign.set2   = ifelse(userdata$Sign.y>0,1,-1),
+		pvalue.set2 = userdata$Pvalue.y,
+		qvalue.set2 = ind.q[[2]],
+		Sign.meta   = result$side,
+		pvalue.meta = result$p,
+		qvalue.meta = qvalue(result$p)$qvalues)
+}
+
+#1. Output meta analysis results
+write.table(meta.result, file=paste(output,"MetaAnalysisResult.txt", sep="/"),
+	col.names=TRUE, row.names=FALSE, quote=FALSE, sep="\t")
+
+#2. a qplot (q-value threshold vs. # of detected proteins)
+meta.no <- q.no(meta.result$qvalue.meta)
+set1.no <- q.no(meta.result$qvalue.set1)
+set2.no <- q.no(meta.result$qvalue.set2)
+max.value = max(c(
+	sum(meta.result$qvalue.meta<q.value.cutoff, na.rm=TRUE),
+	sum(meta.result$qvalue.set1<q.value.cutoff, na.rm=TRUE),
+	sum(meta.result$qvalue.set2<q.value.cutoff, na.rm=TRUE)))
+max.value = round(max.value+5)
+pdf(paste(output,"qplot.pdf", sep="/"))
+par(mar=c(5,5,3,3))
+plot(meta.no$x, meta.no$y, type="l", lwd=2, 
+	xlim=c(0,q.value.cutoff), ylim=c(0, max.value), 
+	xlab="q-value threshold", ylab="# of differential proteins", 
+	cex.lab=1.5, cex.axis=1.5, lty=1, col=1)
+points(set1.no$x, set1.no$y, type="l", lwd=2, lty=1, col=2)
+points(set2.no$x, set2.no$y, type="l", lwd=2, lty=1, col=3)
+legend("topleft", c("Meta Analysis", "Single Analysis (Set1)", "Single Analysis (Set2)"),
+	lty=c(1,1,1),col=c(1,2,3), lwd=c(2,2,2), cex=1.3)
+
+#	This prints "null device\n 1". Seems to work when removed.
+#dev.off()
+
+
+#3. Top differential proteins detected by Meta Analysis
+meta.result.top = meta.result[order(meta.result$qvalue.meta),][1:Top.n,] 
+#sorted by q-value and take the Top.n protein with the smallest q-values
+
+Sign = ifelse(meta.result.top$Sign.meta==-1, "-", "+")
+
+top.result = data.frame(  Rank = c(1:Top.n),
+	Protein=meta.result.top$Protein,
+	Sign = ifelse(meta.result.top$Sign.meta==-1, "-", "+"),
+	Pvalue = meta.result.top$pvalue.meta,
+	Qvalue = meta.result.top$qvalue.meta)
+rownames(top.result)=NULL						  
+pdf(paste(output,"TopDifferentialProteins.pdf",sep="/"))
+tt3 <- ttheme_minimal(
+	core=list(bg_params = list(fill = rep(blues9[2:3],Top.n)[1:Top.n], col=NA),
+	fg_params=list(fontface=1)),
+	colhead=list(fg_params=list(col="navyblue", fontface=1L)))
+grid.arrange(
+	tableGrob(top.result, theme=tt3, rows=NULL), nrow=1)
+
+#	This prints "null device\n 1". Seems to work when removed.
+#dev.off()
+
+
+#4. Summarize Meta Analysis Results
+proteins.dataset1=which(meta.result$qvalue.set1<q.value.cutoff)
+proteins.dataset2=which(meta.result$qvalue.set2<q.value.cutoff)
+proteins.intersect=intersect(proteins.dataset1, proteins.dataset2)
+proteins.union=union(proteins.dataset1, proteins.dataset2)
+IDR = IDR.fun(meta.result$qvalue.meta, cbind(meta.result$qvalue.set1, meta.result$qvalue.set2), q.value.cutoff)
+IRR = IRR.fun(meta.result$qvalue.meta, cbind(meta.result$qvalue.set1, meta.result$qvalue.set2), q.value.cutoff)
+
+summary = rbind( sum(meta.result$qvalue.meta<q.value.cutoff, na.rm=TRUE),
+	length(proteins.dataset1),
+	length(proteins.dataset2),
+	length(proteins.intersect),
+	length(proteins.union))
+diagnosis = rbind(paste(round(IDR*100,2),"%"), 
+	paste(round(IRR*100,2), "%"))
+rownames(summary) = c("Meta Analysis", "Single Analysis 1",
+	"Single Analysis 2", "Intersection among Single Analyses",
+	"Union among Single Analyses")
+colnames(summary)=c("# of detected proteins")
+rownames(diagnosis)=c("Integration-driven Discovery Rate (IDR)",
+	"Integration-driven Revision Rate (IRR)")
+colnames(diagnosis)=c("Meta-Analysis Evaluation")
+pdf(paste(output,"Summary.pdf",sep="/"), height=4, width=6)
+tt1 <- ttheme_minimal(
+	core=list(bg_params = list(fill = rep(blues9[2:3],nrow(summary))[1:nrow(summary)], col=NA),
+	fg_params=list(fontface=1)),
+	colhead=list(fg_params=list(col="navyblue", fontface=1L)))
+tt2 <- ttheme_minimal(
+	core=list(bg_params = list(fill = rep(blues9[2:3],nrow(diagnosis))[1:nrow(diagnosis)], col=NA),
+	fg_params=list(fontface=1)),
+	colhead=list(fg_params=list(col="navyblue", fontface=1L)))
+grid.arrange(
+	tableGrob(summary, theme=tt1),
+	tableGrob(diagnosis, theme=tt2))
+
+#	This prints "null device\n 1". Seems to work when removed.
+#dev.off()
+
