@@ -288,7 +288,7 @@ i = 1
 for( f in input_files ) {
 	message(f)
 
-	this_data = read.csv(file=f, header=TRUE, sep="\t")
+	this_data = read.csv(file=f, header=TRUE, sep="")
 	#	Set each data set to have unique names for Sign and Pvalue by adding numeric suffix (Sign.1, Pvalue.1)
 	names(this_data) = c("Protein",paste("Sign",i,sep="."),paste("Pvalue",i,sep="."))
 
