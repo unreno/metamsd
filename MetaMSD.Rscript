@@ -1,7 +1,7 @@
 #!/usr/bin/env Rscript
 
 message()
-message("MetaMSD")
+message("MetaMSD (Meta Analysis for Mass Spectrometry Data)")
 message()
 
 #directory=getwd()
