@@ -280,6 +280,9 @@ input_files = list.files(input, pattern=".txt$",full.names=TRUE)
 if( length(input_files) == 0 )
 	stop("No files found in input dir\n", call.=FALSE)
 
+message()
+message(paste0("Found ",length(input_files)," in the ",input," directory. Processing..."))
+message()
 
 i = 1
 for( f in input_files ) {
@@ -290,10 +293,10 @@ for( f in input_files ) {
 	names(this_data) = c("Protein",paste("Sign",i,sep="."),paste("Pvalue",i,sep="."))
 
 	if( exists( "userdata" ) ){
-		message("Merging")
+		message("Merging data frame ...")
 		userdata = merge( userdata, this_data, by="Protein", all=TRUE )
 	} else {
-		message("Creating")
+		message("Creating initial data frame ...")
 		userdata = this_data
 	}
 	rm(this_data)
@@ -301,6 +304,11 @@ for( f in input_files ) {
 	i = i + 1
 }
 rm(i)
+
+message()
+message("Merged data.frame contains the following columns.")
+message(paste(colnames(userdata), collapse=", "))
+message()
 
 N.dataset = length( input_files )
 
