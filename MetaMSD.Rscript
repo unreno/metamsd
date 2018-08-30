@@ -112,7 +112,7 @@ left <- function(p, stat){left.p = ifelse(stat<0, p/2, 1-p/2); return(unlist(lef
 #auc.sum <- function(x, diff){
 #	pred <- prediction(as.vector(-1*x), as.vector(diff))
 #	perf <- performance(pred, "prec", "rec")
-#	temp=performance(pred, 'auc') 
+#	temp=performance(pred, 'auc')
 #	auc=slot(temp, "y.values")[[1]][1]	
 #	return(auc)
 #}
@@ -224,7 +224,7 @@ stouffer.left.side <- function(x, wt){
 
 stouffer.right.side <- function(x, wt){
 	if (length(!is.na(x))>0){
-		wt=wt[!is.na(x)]; x=x[!is.na(x)] 
+		wt=wt[!is.na(x)]; x=x[!is.na(x)]
 		z=qnorm(x, lower.tail=TRUE)
 		com.z=sum(wt*z)/sqrt(sum(wt^2))
 		p=pnorm(com.z, lower.tail=TRUE)
@@ -304,14 +304,17 @@ rm(i)
 N.dataset = length( input_files )
 
 
-#DEprotein contains protein, p-values (N.datset columns), and signs (N.dataset columns) 
+#DEprotein contains protein, p-values (N.datset columns), and signs (N.dataset columns)
 #DEprotein=list(Protein=userdata$Protein,
 #	p=cbind(userdata$Pvalue.x, userdata$Pvalue.y),
 #	stat=cbind(userdata$Sign.x, userdata$Sign.y))
 
 DEprotein=list(Protein=userdata$Protein,
-	p=data.matrix(userdata[names(userdata)[grepl("Pvalue", names(userdata))]]),
-	stat=data.matrix(userdata[names(userdata)[grepl("Sign", names(userdata))]]))
+	p=cbind(userdata[names(userdata)[grepl("Pvalue", names(userdata))]]),
+	stat=cbind(userdata[names(userdata)[grepl("Sign", names(userdata))]]))
+
+#	p=data.matrix(userdata[names(userdata)[grepl("Pvalue", names(userdata))]]),
+#	stat=data.matrix(userdata[names(userdata)[grepl("Sign", names(userdata))]]))
 
 
 
@@ -410,9 +413,9 @@ max.value = max( sums )
 max.value = round(max.value+5)
 pdf(paste(output,"qplot.pdf", sep="/"))
 par(mar=c(5,5,3,3))
-plot(meta.no$x, meta.no$y, type="l", lwd=2, 
-	xlim=c(0,q.value.cutoff), ylim=c(0, max.value), 
-	xlab="q-value threshold", ylab="# of differential proteins", 
+plot(meta.no$x, meta.no$y, type="l", lwd=2,
+	xlim=c(0,q.value.cutoff), ylim=c(0, max.value),
+	xlab="q-value threshold", ylab="# of differential proteins",
 	cex.lab=1.5, cex.axis=1.5, lty=1, col=1)
 
 #points(set1.no$x, set1.no$y, type="l", lwd=2, lty=1, col=2)
@@ -442,7 +445,7 @@ legend("topleft", legend_labels, lty=c(1,1,1),col=c(1,2,3), lwd=c(2,2,2), cex=1.
 
 
 #3. Top differential proteins detected by Meta Analysis
-meta.result.top = meta.result[order(meta.result$qvalue.meta),][1:Top.n,] 
+meta.result.top = meta.result[order(meta.result$qvalue.meta),][1:Top.n,]
 #sorted by q-value and take the Top.n protein with the smallest q-values
 
 Sign = ifelse(meta.result.top$Sign.meta==-1, "-", "+")
@@ -452,7 +455,7 @@ top.result = data.frame(  Rank = c(1:Top.n),
 	Sign = ifelse(meta.result.top$Sign.meta==-1, "-", "+"),
 	Pvalue = meta.result.top$pvalue.meta,
 	Qvalue = meta.result.top$qvalue.meta)
-rownames(top.result)=NULL						  
+rownames(top.result)=NULL
 pdf(paste(output,"TopDifferentialProteins.pdf",sep="/"))
 tt3 <- ttheme_minimal(
 	core=list(bg_params = list(fill = rep(blues9[2:3],Top.n)[1:Top.n], col=NA),
@@ -471,36 +474,94 @@ grid.arrange(
 
 
 #4. Summarize Meta Analysis Results
-proteins.dataset1=which(meta.result$qvalue.set1<q.value.cutoff)
-proteins.dataset2=which(meta.result$qvalue.set2<q.value.cutoff)
-proteins.intersect=intersect(proteins.dataset1, proteins.dataset2)
-proteins.union=union(proteins.dataset1, proteins.dataset2)
-IDR = IDR.fun(meta.result$qvalue.meta, cbind(meta.result$qvalue.set1, meta.result$qvalue.set2), q.value.cutoff)
-IRR = IRR.fun(meta.result$qvalue.meta, cbind(meta.result$qvalue.set1, meta.result$qvalue.set2), q.value.cutoff)
+#proteins.dataset1=which(meta.result$qvalue.set1<q.value.cutoff)
+#proteins.dataset2=which(meta.result$qvalue.set2<q.value.cutoff)
+proteins.datasets = c()
+for (i in 1:N.dataset){
+	proteins.datasets[[i]] = which(meta.result[paste0("qvalue.set",i)][,] < q.value.cutoff )
+}
 
-summary = rbind( sum(meta.result$qvalue.meta<q.value.cutoff, na.rm=TRUE),
-	length(proteins.dataset1),
-	length(proteins.dataset2),
-	length(proteins.intersect),
-	length(proteins.union))
-diagnosis = rbind(paste(round(IDR*100,2),"%"), 
+
+for (i in 1:N.dataset){
+
+	if( exists("proteins.intersect") ){
+
+		#proteins.intersect=intersect(proteins.dataset1, proteins.dataset2)
+		#proteins.intersect=intersect(proteins.datasets[[1]], proteins.datasets[[2]])
+		proteins.intersect=intersect(proteins.intersect, proteins.datasets[[i]])
+
+		#proteins.union=union(proteins.dataset1, proteins.dataset2)
+		#proteins.union=union(proteins.datasets[[1]], proteins.datasets[[2]])
+		proteins.union=union(proteins.union, proteins.datasets[[i]])
+
+	} else {
+		proteins.intersect = proteins.datasets[[i]]
+		proteins.union = proteins.datasets[[i]]
+	}
+
+}
+
+
+
+
+
+#IDR = IDR.fun(meta.result$qvalue.meta, cbind(meta.result$qvalue.set1, meta.result$qvalue.set2), q.value.cutoff)
+IDR = IDR.fun(meta.result$qvalue.meta,
+	cbind( meta.result[names(meta.result)[grepl("qvalue.set", names(meta.result))]]),
+	q.value.cutoff)
+
+#IRR = IRR.fun(meta.result$qvalue.meta, cbind(meta.result$qvalue.set1, meta.result$qvalue.set2), q.value.cutoff)
+IRR = IRR.fun(meta.result$qvalue.meta,
+	cbind( meta.result[names(meta.result)[grepl("qvalue.set", names(meta.result))]]),
+	q.value.cutoff)
+	
+
+#summary = rbind( sum(meta.result$qvalue.meta<q.value.cutoff, na.rm=TRUE),
+#	length(proteins.dataset1),
+#	length(proteins.dataset2),
+#	length(proteins.intersect),
+#	length(proteins.union))
+
+summary = rbind( sum(meta.result$qvalue.meta<q.value.cutoff, na.rm=TRUE))
+#summary = rbind( summary, length(proteins.dataset1) )
+#summary = rbind( summary, length(proteins.dataset2) )
+for (i in 1:N.dataset){
+	summary = rbind( summary, length(proteins.datasets[[i]]) )
+}
+summary = rbind( summary, length(proteins.intersect), length(proteins.union))
+
+diagnosis = rbind(paste(round(IDR*100,2),"%"),
 	paste(round(IRR*100,2), "%"))
-rownames(summary) = c("Meta Analysis", "Single Analysis 1",
-	"Single Analysis 2", "Intersection among Single Analyses",
-	"Union among Single Analyses")
+
+rownames_summary = c("Meta Analysis")
+for (i in 1:N.dataset){
+	rownames_summary = append(rownames_summary,c(paste0("Single Analysis ",i)))
+}
+rownames_summary = append(rownames_summary,c("Intersection among Single Analyses","Union among Single Analyses"))
+#rownames(summary) = c("Meta Analysis", "Single Analysis 1",
+#	"Single Analysis 2", "Intersection among Single Analyses",
+#	"Union among Single Analyses")
+rownames(summary) = rownames_summary
+
 colnames(summary)=c("# of detected proteins")
+
 rownames(diagnosis)=c("Integration-driven Discovery Rate (IDR)",
 	"Integration-driven Revision Rate (IRR)")
+
 colnames(diagnosis)=c("Meta-Analysis Evaluation")
+
 pdf(paste(output,"Summary.pdf",sep="/"), height=4, width=6)
+
 tt1 <- ttheme_minimal(
 	core=list(bg_params = list(fill = rep(blues9[2:3],nrow(summary))[1:nrow(summary)], col=NA),
 	fg_params=list(fontface=1)),
 	colhead=list(fg_params=list(col="navyblue", fontface=1L)))
+
 tt2 <- ttheme_minimal(
 	core=list(bg_params = list(fill = rep(blues9[2:3],nrow(diagnosis))[1:nrow(diagnosis)], col=NA),
 	fg_params=list(fontface=1)),
 	colhead=list(fg_params=list(col="navyblue", fontface=1L)))
+
 grid.arrange(
 	tableGrob(summary, theme=tt1),
 	tableGrob(diagnosis, theme=tt2))
