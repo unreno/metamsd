@@ -276,45 +276,42 @@ IRR.fun <- function(q.int, q.ind, cut){
 
 ######################################################################
 
-
-#Two Datasets for now; need to make it such that it can take any number of datasets > 1
-
-#data1 = read.csv(file=paste(input, "Dataset1.txt", sep="/"), header=TRUE, sep="\t")
-#data2 = read.csv(file=paste(input, "Dataset2.txt", sep="/"), header=TRUE, sep="\t")
-#N.dataset = 2 #Now, it works for only 2
-#userdata=merge(data1, data2, by.x="Protein", by.y="Protein", all=TRUE, all.x=TRUE, all.y=TRUE)
-
 input_files = list.files(input, pattern=".txt$",full.names=TRUE)
+if( length(input_files) == 0 )
+	stop("No files found in input dir\n", call.=FALSE)
 
+
+i = 1
 for( f in input_files ) {
 	message(f)
-	this_data = read.csv(file=f, header=TRUE, sep="\t")
 
-	#	apparently "data" exists from the beginning as a function so use something else
-	if( exists( "prev_data" ) ){
+	this_data = read.csv(file=f, header=TRUE, sep="\t")
+	names(this_data) = c("Protein",paste("Sign",i,sep="."),paste("Pvalue",i,sep="."))
+
+	if( exists( "userdata" ) ){
 		message("Merging")
-		userdata=merge(prev_data, this_data, by.x="Protein", by.y="Protein", all=TRUE, all.x=TRUE, all.y=TRUE)
-		prev_data=userdata
+		userdata = merge( userdata, this_data, by="Protein", all=TRUE )
 	} else {
 		message("Creating")
-		prev_data = this_data
+		userdata = this_data
 	}
+	rm(this_data)
 
+	i = i + 1
 }
+rm(i)
 
-#data1 = read.csv(file=input_files[1], header=TRUE, sep="\t")
-#data2 = read.csv(file=input_files[2], header=TRUE, sep="\t")
 N.dataset = length( input_files )
-#userdata=merge(data1, data2, by.x="Protein", by.y="Protein", all=TRUE, all.x=TRUE, all.y=TRUE)
-
-
-
 
 
 #DEprotein contains protein, p-values (N.datset columns), and signs (N.dataset columns) 
+#DEprotein=list(Protein=userdata$Protein,
+#	p=cbind(userdata$Pvalue.x, userdata$Pvalue.y),
+#	stat=cbind(userdata$Sign.x, userdata$Sign.y))
+
 DEprotein=list(Protein=userdata$Protein,
-	p=cbind(userdata$Pvalue.x, userdata$Pvalue.y),
-	stat=cbind(userdata$Sign.x, userdata$Sign.y))
+	p=data.matrix(userdata[names(userdata)[grepl("Pvalue", names(userdata))]]),
+	stat=data.matrix(userdata[names(userdata)[grepl("Sign", names(userdata))]]))
 
 
 
@@ -324,6 +321,8 @@ for (i in 1:N.dataset){
 	ind.q[[i]]=qvalue(DEprotein$p[,i])$qvalues
 }
 
+
+
 #Meta Analysis
 if (MetaAnalysis=="Stouffer"){
 	result=Stouffer(DEprotein)
@@ -331,30 +330,57 @@ if (MetaAnalysis=="Stouffer"){
 	result=Pearson(DEprotein)
 } else {
 	#if ((MetaAnalysis!="Stouffer") & (MetaAnalysis!="Pearson")){
-
 	#	should never have gotten here
 	cat("Choose between Stouffer and Pearson.")
 	result=NULL
 }
 
+
+
+
+#		Sign.set1   = ifelse(userdata$Sign.1>0,1,-1),
+#		pvalue.set1 = userdata$Pvalue.1,
+#		qvalue.set1 = ind.q[[1]],
+#		Sign.set2   = ifelse(userdata$Sign.2>0,1,-1),
+#		pvalue.set2 = userdata$Pvalue.2,
+#		qvalue.set2 = ind.q[[2]],
+
 if (length(result)>0){
 	q.meta=qvalue(result$p)$qvalues
 	meta.result = data.frame(
-		Protein     = DEprotein$Protein,
-		Sign.set1   = ifelse(userdata$Sign.x>0,1,-1),
-		pvalue.set1 = userdata$Pvalue.x,
-		qvalue.set1 = ind.q[[1]],
-		Sign.set2   = ifelse(userdata$Sign.y>0,1,-1),
-		pvalue.set2 = userdata$Pvalue.y,
-		qvalue.set2 = ind.q[[2]],
-		Sign.meta   = result$side,
-		pvalue.meta = result$p,
-		qvalue.meta = qvalue(result$p)$qvalues)
+		Protein     = DEprotein$Protein )
+
+#	separated simply for output comparison
+#		Protein     = DEprotein$Protein,
+#		Sign.meta   = result$side,
+#		pvalue.meta = result$p,
+#		qvalue.meta = qvalue(result$p)$qvalues)
+
+	for (i in 1:N.dataset){
+		meta.result[paste0("Sign.set",i)]   = ifelse( userdata[paste("Sign",i,sep=".")] > 0, 1, -1)
+		meta.result[paste0("pvalue.set",i)] = userdata[paste("Pvalue",i,sep=".")]
+		meta.result[paste0("qvalue.set",i)] = ind.q[[i]]
+	}
+
+	meta.result$Sign.meta   = result$side
+	meta.result$pvalue.meta = result$p
+	meta.result$qvalue.meta = qvalue(result$p)$qvalues
+
 }
+
+#message(colnames(meta.result))
+
+
+
+
 
 #1. Output meta analysis results
 write.table(meta.result, file=paste(output,"MetaAnalysisResult.txt", sep="/"),
 	col.names=TRUE, row.names=FALSE, quote=FALSE, sep="\t")
+
+
+
+
 
 #2. a qplot (q-value threshold vs. # of detected proteins)
 meta.no <- q.no(meta.result$qvalue.meta)
@@ -380,6 +406,11 @@ legend("topleft", c("Meta Analysis", "Single Analysis (Set1)", "Single Analysis 
 #dev.off()
 
 
+
+
+
+
+
 #3. Top differential proteins detected by Meta Analysis
 meta.result.top = meta.result[order(meta.result$qvalue.meta),][1:Top.n,] 
 #sorted by q-value and take the Top.n protein with the smallest q-values
@@ -402,6 +433,11 @@ grid.arrange(
 
 #	This prints "null device\n 1". Seems to work when removed.
 #dev.off()
+
+
+
+
+
 
 
 #4. Summarize Meta Analysis Results
