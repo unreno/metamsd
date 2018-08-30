@@ -54,9 +54,9 @@ option_list = list(
 	make_option(c("-t","--top"), type="integer", default=15,
 		help="top n protein final list in Table [ default = %default ]", metavar="number"),
 	make_option(c("-i", "--input"), type="character", default="input",
-		help="input dir [ default = %default ]", metavar="character"),
+		help="input directory [ default = %default ]", metavar="character"),
 	make_option(c("-o", "--output"), type="character", default="output",
-		help="output dir [ default = %default ]", metavar="character")
+		help="output directory [ default = %default ]", metavar="character")
 )
 opt_parser = OptionParser(option_list=option_list)
 opt = parse_args(opt_parser)
