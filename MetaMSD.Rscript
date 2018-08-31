@@ -4,27 +4,9 @@ message()
 message("MetaMSD (Meta Analysis for Mass Spectrometry Data)")
 message()
 
-#directory=getwd()
-
-#r <- getOption("repos")
-#if( r['CRAN'] == "@CRAN@" ){
-#	r["CRAN"] <- "https://cloud.r-project.org/"
-#}
-
-#	install.packages will prompt for a CRAN location which will cause a crash
-#	I set this in my ~/.Rprofile, but not everyone does.
-#	If the user does not have package install privileges, it may also fail.
-
-#list.of.packages <- c("ROCR","stats","gridExtra","gtable","optparse")
-#new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
-#if(length(new.packages)) install.packages(new.packages, repos=r)
-
-
-
 #	BioConductor packages ( qvalue was not available for R 3.5.0 )
 #	Using BioConductor all the time if possible is likely the better option and seems to work.
 
-#list.of.packages <- c("qvalue")
 list.of.packages <- c("ROCR","stats","gridExtra","gtable","optparse","qvalue")
 new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
 if(length(new.packages)){
@@ -33,20 +15,10 @@ if(length(new.packages)){
 }
 
 
-
 #	http://tuxette.nathalievilla.org/?p=1696
 require("optparse")
 
 option_list = list(
-#	make_option(c("-m", "--models"), type="character", default="models/",
-#		help="models path [ default = %default ]", metavar="character"),
-#	make_option(c("-d", "--data"), type="character", default="data/",
-#		help="data path [ default = %default ]", metavar="character"),
-#	make_option(c("-e", "--decoy"), type="character", default="Decoy_v1.RData",
-#		help="decoy model file with path [ default = %default ]", metavar="character"),
-#	make_option(c("--snr"), type="integer", default=3,
-#		help="Acceptable SNR ratio for peaks [ default = %default ]", metavar="number"),
-
 	make_option(c("-m","--metaanalysis"), type="character", default="Stouffer",
 		help="either Stouffer's or Pearson's test [ default = %default ]", metavar="character"),
 	make_option(c("-c","--cutoff"), type="double", default=0.05,
@@ -62,10 +34,6 @@ opt_parser = OptionParser(option_list=option_list)
 opt = parse_args(opt_parser)
 
 
-
-# the number of input data sets. This will be computed later.
-
-
 if ( ! opt$metaanalysis %in% c("Stouffer","Pearson") ){
 	stop("MetaAnalysis must be either Stouffer or Pearson\n", call.=FALSE)
 }
@@ -76,11 +44,6 @@ input          = opt$input
 output         = opt$output
 dir.create( output, showWarnings = FALSE, recursive = TRUE )
 
-
-
-
-
-
 require(ROCR)
 require(stats)
 require(qvalue)
@@ -88,17 +51,7 @@ require(gridExtra)
 require(gtable)
 
 
-
-
-
-
-
-
-
-
 ######################################################################
-
-
 
 
 ################
@@ -106,18 +59,6 @@ require(gtable)
 ################
 
 left <- function(p, stat){left.p = ifelse(stat<0, p/2, 1-p/2); return(unlist(left.p))}
-
-#qvalue.q <- function(x){qvalue(x)$qvalues}
-#bh.fdr.q <- function(x){p.adjust(x, method="fdr")}
-#auc.sum <- function(x, diff){
-#	pred <- prediction(as.vector(-1*x), as.vector(diff))
-#	perf <- performance(pred, "prec", "rec")
-#	temp=performance(pred, 'auc')
-#	auc=slot(temp, "y.values")[[1]][1]	
-#	return(auc)
-#}
-#mean.na.rm=function(x){mean(x[!is.na(x)])}
-#sd.na.rm=function(x){sd(x[!is.na(x)])}
 
 #############
 #Fisher.test#
@@ -313,20 +254,12 @@ message()
 N.dataset = length( input_files )
 
 
-#DEprotein contains protein, p-values (N.datset columns), and signs (N.dataset columns)
-#DEprotein=list(Protein=userdata$Protein,
-#	p=cbind(userdata$Pvalue.x, userdata$Pvalue.y),
-#	stat=cbind(userdata$Sign.x, userdata$Sign.y))
-
 #	userdata should have columns ...
 #	Protein, Sign.1, Pvalue.1, Sign.2, Pvalue.2, ...
 #	Use grepl to select those matching.
 DEprotein=list(Protein=userdata$Protein,
 	p=cbind(userdata[names(userdata)[grepl("Pvalue", names(userdata))]]),
 	stat=cbind(userdata[names(userdata)[grepl("Sign", names(userdata))]]))
-
-#	p=data.matrix(userdata[names(userdata)[grepl("Pvalue", names(userdata))]]),
-#	stat=data.matrix(userdata[names(userdata)[grepl("Sign", names(userdata))]]))
 
 #calculate q-value for each dataset
 ind.q = NULL
@@ -345,13 +278,6 @@ if (MetaAnalysis=="Stouffer"){
 	cat("Choose between Stouffer and Pearson.")
 	result=NULL
 }
-
-#		Sign.set1   = ifelse(userdata$Sign.1>0,1,-1),
-#		pvalue.set1 = userdata$Pvalue.1,
-#		qvalue.set1 = ind.q[[1]],
-#		Sign.set2   = ifelse(userdata$Sign.2>0,1,-1),
-#		pvalue.set2 = userdata$Pvalue.2,
-#		qvalue.set2 = ind.q[[2]],
 
 if (length(result)>0){
 	q.meta=qvalue(result$p)$qvalues
@@ -379,8 +305,6 @@ if (length(result)>0){
 
 }
 
-#message(colnames(meta.result))
-
 ######################################################################
 
 # 1. Output meta analysis results
@@ -391,19 +315,11 @@ write.table(meta.result, file=paste(output,"MetaAnalysisResult.txt", sep="/"),
 
 # 2. a qplot (q-value threshold vs. # of detected proteins)
 meta.no <- q.no(meta.result$qvalue.meta)
-#set1.no <- q.no(meta.result$qvalue.set1)
-#set2.no <- q.no(meta.result$qvalue.set2)
 
 set.no = c()	#	list()
 for (i in 1:N.dataset){
-	#message(meta.result[paste0("qvalue.set",i)][,])
 	set.no[[i]] <- q.no(meta.result[paste0("qvalue.set",i)][,])
 }
-
-#max.value = max(c(
-#	sum(meta.result$qvalue.meta<q.value.cutoff, na.rm=TRUE),
-#	sum(meta.result$qvalue.set1<q.value.cutoff, na.rm=TRUE),
-#	sum(meta.result$qvalue.set2<q.value.cutoff, na.rm=TRUE)))
 
 sums = c()
 sums[1] = sum(meta.result$qvalue.meta<q.value.cutoff, na.rm=TRUE)
@@ -420,16 +336,12 @@ plot(meta.no$x, meta.no$y, type="l", lwd=2,
 	xlab="q-value threshold", ylab="# of differential proteins",
 	cex.lab=1.5, cex.axis=1.5, lty=1, col=1)
 
-#points(set1.no$x, set1.no$y, type="l", lwd=2, lty=1, col=2)
-#points(set2.no$x, set2.no$y, type="l", lwd=2, lty=1, col=3)
 for (i in 1:N.dataset){
 	points(set.no[[i]]$x, set.no[[i]]$y, type="l", lwd=2, lty=1, col=i+1)
 }
 
 legend_labels = c("Meta Analysis")
-#"Single Analysis (Set1)", "Single Analysis (Set2)")
 for (i in 1:N.dataset){
-#	legend_labels[length(legend_labels)+1] = paste0("Single Analysis (Set ",i,")")
 	legend_labels[i+1] = paste0("Single Analysis (Set ",i,")")
 }
 legend("topleft", legend_labels, lty=c(1,1,1),col=c(1,2,3), lwd=c(2,2,2), cex=1.3)
@@ -459,25 +371,19 @@ tt3 <- ttheme_minimal(
 grid.arrange(
 	tableGrob(top.result, theme=tt3, rows=NULL), nrow=1)
 
+write.table(top.result, file=paste(output,"TopDifferentialProteins.txt", sep="/"),
+	col.names=TRUE, row.names=TRUE, quote=FALSE, sep="\t")
+
 #	This prints "null device\n 1". Seems to work when removed.
 #dev.off()
 
 ######################################################################
 
 # 4. Summarize Meta Analysis Results
-#proteins.dataset1=which(meta.result$qvalue.set1<q.value.cutoff)
-#proteins.dataset2=which(meta.result$qvalue.set2<q.value.cutoff)
 proteins.datasets = c()
 for (i in 1:N.dataset){
 	proteins.datasets[[i]] = which(meta.result[paste0("qvalue.set",i)][,] < q.value.cutoff )
 }
-#message(paste0("Datasets length : ", length(proteins.datasets) ))
-
-#proteins.intersect=intersect(proteins.dataset1, proteins.dataset2)
-#proteins.intersect=intersect(proteins.datasets[[1]], proteins.datasets[[2]])
-
-#proteins.union=union(proteins.dataset1, proteins.dataset2)
-#proteins.union=union(proteins.datasets[[1]], proteins.datasets[[2]])
 
 for (i in 1:N.dataset){
 	if( exists("proteins.intersect") ){
@@ -489,34 +395,17 @@ for (i in 1:N.dataset){
 	}
 }
 
-
-
 meta.result.qvalue.sets = cbind( meta.result[names(meta.result)[grepl("qvalue.set", names(meta.result))]])
 
-#IDR = IDR.fun(meta.result$qvalue.meta, cbind(meta.result$qvalue.set1, meta.result$qvalue.set2), q.value.cutoff)
 IDR = IDR.fun(meta.result$qvalue.meta,
 	meta.result.qvalue.sets,
 	q.value.cutoff)
 
-#	cbind( meta.result[names(meta.result)[grepl("qvalue.set", names(meta.result))]]),
-
-#IRR = IRR.fun(meta.result$qvalue.meta, cbind(meta.result$qvalue.set1, meta.result$qvalue.set2), q.value.cutoff)
 IRR = IRR.fun(meta.result$qvalue.meta,
 	meta.result.qvalue.sets,
 	q.value.cutoff)
 
-#	cbind( meta.result[names(meta.result)[grepl("qvalue.set", names(meta.result))]]),
-	
-
-#summary = rbind( sum(meta.result$qvalue.meta<q.value.cutoff, na.rm=TRUE),
-#	length(proteins.dataset1),
-#	length(proteins.dataset2),
-#	length(proteins.intersect),
-#	length(proteins.union))
-
 summary = rbind( sum(meta.result$qvalue.meta<q.value.cutoff, na.rm=TRUE))
-#summary = rbind( summary, length(proteins.dataset1) )
-#summary = rbind( summary, length(proteins.dataset2) )
 for (i in 1:N.dataset){
 	summary = rbind( summary, length(proteins.datasets[[i]]) )
 }
@@ -531,9 +420,6 @@ for (i in 1:N.dataset){
 }
 rownames_summary = append(rownames_summary,
 	c("Intersection among Single Analyses","Union among Single Analyses"))
-#rownames(summary) = c("Meta Analysis", "Single Analysis 1",
-#	"Single Analysis 2", "Intersection among Single Analyses",
-#	"Union among Single Analyses")
 rownames(summary) = rownames_summary
 
 colnames(summary)=c("# of detected proteins")
@@ -558,6 +444,12 @@ tt2 <- ttheme_minimal(
 grid.arrange(
 	tableGrob(summary, theme=tt1),
 	tableGrob(diagnosis, theme=tt2))
+
+write.table(summary, file=paste(output,"Summary.txt", sep="/"),
+	col.names=TRUE, row.names=TRUE, quote=FALSE, sep="\t")
+write.table(diagnosis, file=paste(output,"Diagnosis.txt", sep="/"),
+	col.names=TRUE, row.names=TRUE, quote=FALSE, sep="\t")
+
 
 #	This prints "null device\n 1". Seems to work when removed.
 #dev.off()
