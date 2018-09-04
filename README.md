@@ -84,6 +84,8 @@ Options:
 
 ##	Example Run
 
+With a sample collection containing 5 datasets ...
+
 ```BASH
 > find input
 
@@ -93,6 +95,8 @@ input/Dataset3.txt
 input/Dataset4.txt
 input/Dataset5.txt
 ```
+
+where the datasets contain computer generated data like ...
 
 ```BASH
 > head Dataset1.txt 
@@ -109,10 +113,13 @@ Protein8 -1.51486831001556 0.18547816059573
 Protein9 0.188369920348748 0.855631734879989
 ```
 
+running `MetaMSD` with the default settings ...
+
 ```BASH
 ./MetaMSD.Rscript
 ```
 
+will produce the following output ...
 
 ```BASH
 > find output
@@ -126,6 +133,7 @@ output/TopDifferentialProteins.txt
 output/qplot.pdf
 ```
 
+with the output text files containing ...
 
 ```BASH
 > cat Diagnosis.txt 
@@ -173,3 +181,6 @@ Protein1002	-1	0.533402079887067	0.672719801726766	-1	0.920581003514001	0.783473
 Protein1003	-1	0.578953213094243	0.692898850468948	NA	NA	NA	NA	NA	NA	-1	0.882493227428588	0.712118550653194	NA	NA	NA	-1	0.619259056648539	0.713299706729408
 Protein1004	1	0.549422339931358	0.682144306530344	1	0.856354965054217	0.77370063364739	NA	NA	NA	-1	0.153051869148448	0.333331184998575	1	0.623955687609639	0.633333713356406	-1	0.936658634996219	0.822836983443449
 ```
+
+
+
