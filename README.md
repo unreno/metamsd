@@ -7,7 +7,7 @@ MetaMSD integrates proteomics results (p-values) from multiple experiments
 
 ## Installation
 
-`MetaMSD.Rscript` is a single, self contained R script that is being developed in a OS X / Linux environment with R version 3.5.0, although it should run in Windows just the same.
+`MetaMSD.Rscript` is a single, self-contained R script that is being developed in a OS X / Linux environment with R version 3.5.0, although it should run in Windows just the same.
 
 R is available from a number of sources, but its primary is https://www.r-project.org. It can be installed from a number of package managers like MacPorts, Homebrew, APT (for Advanced Package Tool), Yellowdog Updater, Modified (YUM), or explicitly compiled from source code.
 
@@ -34,6 +34,8 @@ Once `MetaMSD.Rscript`, has been acquired, it may require changing the mode of t
 ```BASH
 chmod a-x MetaMSD.Rscript
 ```
+
+As the script is self-contained, you can place it anywhere, although in your `PATH` would be most convenient, as you can then run it without specifying its location.
 
 The script should now run. The first time this script is run, it will check for the presence of its required packages and attempt to install them should they not already be. This could take a few minutes. In addition, some of these R packages may have some system specific dependencies which you may need to install in order to successfully run this script.
 
