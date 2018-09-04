@@ -15,7 +15,7 @@ if(length(new.packages)){
 
 
 #	http://tuxette.nathalievilla.org/?p=1696
-require("optparse")
+library("optparse")
 
 option_list = list(
 	make_option(c("-m","--metaanalysis"), type="character", default="Stouffer",
