@@ -4,8 +4,7 @@ message()
 message("MetaMSD (Meta Analysis for Mass Spectrometry Data)")
 message()
 
-#	BioConductor packages ( qvalue was not available for R 3.5.0 )
-#	Using BioConductor all the time if possible is likely the better option and seems to work.
+#	Using BioConductor to install any missing required packages.
 
 list.of.packages <- c("ROCR","stats","gridExtra","gtable","optparse","qvalue")
 new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
@@ -20,15 +19,15 @@ require("optparse")
 
 option_list = list(
 	make_option(c("-m","--metaanalysis"), type="character", default="Stouffer",
-		help="either Stouffer's or Pearson's test [ default = %default ]", metavar="character"),
+		help="Specify a meta-analysis test. Either Stouffer or Pearson. [ default = %default ]", metavar="character"),
 	make_option(c("-c","--cutoff"), type="double", default=0.05,
-		help="q.value.cutoff [ default = %default ]", metavar="number"),
+		help="Specify a q-value cut off. [ default = %default ]", metavar="number"),
 	make_option(c("-t","--top"), type="integer", default=15,
-		help="top n protein final list in Table [ default = %default ]", metavar="number"),
+		help="Specify the number of proteins in Top-N differential protein list. [ default = %default ]", metavar="number"),
 	make_option(c("-i", "--input"), type="character", default="input",
-		help="input directory [ default = %default ]", metavar="character"),
+		help="Specify the input folder name. [ default = %default ]", metavar="character"),
 	make_option(c("-o", "--output"), type="character", default="output",
-		help="output directory [ default = %default ]", metavar="character")
+		help="Specify the output folder name. [ default = %default ]", metavar="character")
 )
 opt_parser = OptionParser(option_list=option_list)
 opt = parse_args(opt_parser)
